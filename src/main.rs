@@ -1,62 +1,121 @@
-use std::{sync::LazyLock, time::Duration};
+use std::path::PathBuf;
 
 use anyhow::Context;
-use clap::Parser;
-use regex::Regex;
-use scraper::{Html, Selector};
-use thirtyfour::{By, ChromiumLikeCapabilities, DesiredCapabilities, WebDriver};
+use pest::Parser;
+use serde::{Deserialize, Serialize};
 
 const STEAMWORKS_PAGE: &str = "https://partner.steamgames.com/pricing/explorer";
 
-static NUMBER_REGEX: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[0-9]+[.,][0-9]{2}").expect("valid regex"));
+#[derive(pest_derive::Parser)]
+#[grammar = "../../parser.pest"]
+struct JsonParser;
 
 #[derive(clap::Parser)]
 struct Args {
-    /// Display web engine
-    #[arg(short, long, required = false, default_value_t = false)]
-    visible: bool,
+    #[arg(short, long, required = false, default_value_os_t  = std::env::current_dir().unwrap_or_default().join("pricing_table.json"))]
+    output: PathBuf,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let Args { visible } = Args::parse();
-
-    let mut caps = DesiredCapabilities::chrome();
-    if visible {
-        caps.unset_headless()?;
-    } else {
-        caps.set_headless()?;
-    }
-    let driver = WebDriver::managed(caps).latest().await?;
-
-    driver.goto(STEAMWORKS_PAGE).await?;
-
-    tokio::time::sleep(Duration::from_secs(1)).await;
-
-    let range = usd_prices_selector(&driver).await?;
-
-    Ok(())
+#[derive(Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+struct RenderContext {
+    query_data: String,
 }
 
-async fn usd_prices_selector(driver: &WebDriver) -> anyhow::Result<Vec<f64>> {
-    static SELECTOR: LazyLock<Selector> =
-        LazyLock::new(|| Selector::parse(BUTTON_SELECTOR).expect("selector is always valid"));
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryData {
+    pub queries: Vec<QueryEntry>,
+}
 
-    let document = Html::parse_document(&driver.source().await?);
+/// Single query entry.
+///
+/// `state.data` can contain either:
+/// - an array of pricing objects, or
+/// - a settings object (`preference_state`, `version`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryEntry {
+    pub state: QueryState,
+}
 
-    const BUTTON_SELECTOR: &str = "button[class^='INXuF']";
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueryState {
+    pub data: QueryStateData,
+}
 
-    let prices = document
-        .select(&SELECTOR)
-        .filter_map(|this| {
-            let this = this.text().collect::<Vec<_>>().join("");
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum QueryStateData {
+    PricingList(Vec<PricingEntry>),
+    PreferenceState(PreferenceState),
+}
 
-            NUMBER_REGEX
-                .find(&this)
-                .and_then(|m| m.as_str().parse::<f64>().ok())
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PricingEntry {
+    pub convert_method: u8,
+    pub currency_prices: Vec<CurrencyPrice>,
+    pub region_prices: Vec<RegionPrice>,
+    pub usd_price: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CurrencyPrice {
+    pub currency_code: u16,
+    pub price: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionPrice {
+    pub currency_code: u16,
+    pub price: u64,
+    pub region_code: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PreferenceState {}
+
+fn main() -> anyhow::Result<()> {
+    let Args { output } = <Args as clap::Parser>::parse();
+
+    let page = reqwest::blocking::Client::new()
+        .get(STEAMWORKS_PAGE)
+        .send()
+        .context("failed to get steam page")?
+        .text()?;
+
+    let mut pairs = JsonParser::parse(Rule::find_sc, &page).context("failed to parse page")?;
+
+    // This is LITERALLY JSON STRING
+    // serialization will fail if you parse it as struct, so you need to extract it first
+    // I'm too tired to deal with during parsing so do dumb serialization below
+    let json_string = pairs
+        .find(|this| this.as_rule() == Rule::find_sc)
+        .and_then(|this| this.into_inner().find(|this| this.as_rule() == Rule::JSON))
+        .and_then(|this| {
+            this.into_inner()
+                .find(|this| this.as_rule() == Rule::JSON_INNER)
         })
+        .context("failed to find json with table")?
+        .as_str();
+
+    let query_data =
+        serde_json::from_str::<RenderContext>(&serde_json::from_str::<String>(json_string)?)?
+            .query_data;
+
+    let items = serde_json::from_str::<QueryData>(&query_data)?
+        .queries
+        .into_iter()
+        .filter_map(|this| match this.state.data {
+            QueryStateData::PricingList(items) => Some(items),
+            QueryStateData::PreferenceState(_) => None,
+        })
+        .flatten()
         .collect::<Vec<_>>();
 
-    Ok(prices)
+    std::fs::write(
+        output,
+        serde_json::to_string_pretty(&items).expect("never fails"),
+    )
+    .context("failed to save parsed table")?;
+
+    Ok(())
 }
