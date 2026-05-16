@@ -1,0 +1,42 @@
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+
+JS_PARSE_START = {
+    "window.SSR.renderContext"
+    ~ WHITESPACE*
+    ~ "="
+    ~ WHITESPACE*
+    ~ "JSON.parse("
+}
+
+JS_PARSE_END = { ");" }
+
+JSON = {
+    QUOTE_START?
+    ~ JSON_INNER
+    ~ QUOTE_END?
+    ~ COMMA?
+}
+
+QUOTE_START = _{ "'" }
+QUOTE_END   = _{ "'" }
+COMMA       = _{ "," }
+
+JSON_INNER = {
+    (!("'" ~ ","? ~ JS_PARSE_END) ~ !JS_PARSE_END ~ ANY)*
+}
+
+SC = _{
+    ^"<script"
+    ~ (!">" ~ ANY)*
+    ~ ">"
+    ~ (!JS_PARSE_START ~ ANY)*
+    ~ JS_PARSE_START
+    ~ JSON
+    ~ JS_PARSE_END
+    ~ (!^"</script>" ~ ANY)*
+    ~ ^"</script>"
+}
+
+find_sc = { (!SC ~ ANY)* ~ SC }
+
+ 
