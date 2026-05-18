@@ -1,120 +1,22 @@
-const PRICING_TABLE =
-  "https://raw.githubusercontent.com/NYBACHOK/steam-pricing/master/pricing_table.json";
+import {
+  CURRENCY_MAP,
+  PRICING_TABLE,
+  STORAGE_KEY,
+  STORAGE_KEY_CONFIG,
+  TTL,
+} from "./consts.ts";
+import { getConfig, storageGet, storageSet } from "./storage.ts";
+import {
+  ConversionMethod,
+  PricingEntry,
+  PagePrice,
+  ComparisonResult,
+  ComparisonPage,
+} from "./types.ts";
+import { buildButton, createModal } from "./ui.ts";
+import { getConversionMethodDescription, getConversionMethodName } from "./utils.ts";
 
-type ConversionMethod = 1 | 2 | 3;
 
-type PricingEntry = {
-  usd_price?: number;
-  currency_prices?: Array<{ currency_code: number; price: number }>;
-  region_prices?: Array<any>;
-  convert_method?: number;
-};
-
-interface PagePrice {
-  finalPrice: number;
-  finalRaw: string;
-  originalPrice: number | null;
-  originalRaw: string | null;
-  symbol: string | null;
-}
-
-interface ComparisonResult {
-  entry: PricingEntry | null;
-  price: number | null;
-  percentFinal: number | null;
-  percentOrig: number | null;
-  currencyCode?: number | null; // Tracks the ID of the currency used in comparison
-}
-
-interface ComparisonPage {
-  method: ConversionMethod;
-  title: string;
-  description: string;
-  result: ComparisonResult;
-}
-
-const STORAGE_KEY = "steam_pricing_cache_v1";
-const STORAGE_KEY_CONFIG = "steam_pricing_config_v1";
-const TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-const CURRENCY_MAP: Record<string, number> = {
-  $: 1, // USD
-  "£": 2, // GBP
-  "€": 3, // EUR
-  CHF: 4, // CHF
-  zł: 6, // PLN
-  R$: 7, // BRL
-  "¥": 8, // JPY / CNY
-  Rp: 10, // IDR
-  RM: 11, // MYR
-  "₱": 12, // PHP
-  S$: 13, // SGD
-  "฿": 14, // THB
-  "₫": 15, // VND
-  "₩": 16, // KRW
-  "₺": 17, // TRY
-  "₴": 18, // UAH
-  Mex$: 19, // MXN
-  CDN$: 20, // CAD
-  A$: 21, // AUD
-  NZ$: 22, // NZD
-  "₹": 24, // INR
-  CLP$: 25, // CLP
-  "S/.": 26, // PEN
-  COL$: 27, // COP
-  R: 28, // ZAR
-  HK$: 29, // HKD
-  NT$: 30, // TWD
-  SR: 31, // SAR
-  AED: 32, // AED
-  ARS$: 34, // ARS
-  "₪": 35, // ILS
-  "₸": 37, // KZT
-  KD: 38, // KWD
-  QR: 39, // QAR
-  "₡": 40, // CRC
-  $U: 41, // UYU
-};
-
-function storageGet<T = any>(key: string): Promise<T | undefined> {
-  return new Promise((res) => {
-    chrome.storage.local.get([key], (out) => {
-      res(out[key] as T | undefined);
-    });
-  });
-}
-
-function storageSet(key: string, value: any): Promise<void> {
-  return new Promise((res) => {
-    chrome.storage.local.set({ [key]: value }, () => res());
-  });
-}
-
-function getConversionMethodName(method: ConversionMethod): string {
-  switch (method) {
-    case 1:
-      return "Raw Conversion";
-    case 2:
-      return "Purchase Power";
-    case 3:
-      return "Default Multi Variable";
-    default:
-      return "Unknown";
-  }
-}
-
-function getConversionMethodDescription(method: ConversionMethod): string {
-  switch (method) {
-    case 1:
-      return "Direct currency conversion based on exchange rates.";
-    case 2:
-      return "Adjusted using regional purchasing power parity.";
-    case 3:
-      return "Valve default pricing model using multiple variables.";
-    default:
-      return "";
-  }
-}
 
 function findBestMatchForMethod(
   table: PricingEntry[],
@@ -307,54 +209,6 @@ function findPriceOnPage(): PagePrice | null {
   return null;
 }
 
-function buildButton(): HTMLButtonElement {
-  const btn = document.createElement("button");
-  btn.id = "steam-pricing-compare-btn";
-  btn.textContent = "Compare price";
-  btn.style.position = "fixed";
-  btn.style.right = "12px";
-  btn.style.bottom = "12px";
-  btn.style.zIndex = "999999";
-  btn.style.padding = "8px 10px";
-  btn.style.borderRadius = "6px";
-  btn.style.background = "#1e90ff";
-  btn.style.color = "white";
-  btn.style.border = "none";
-  btn.style.cursor = "pointer";
-  btn.style.boxShadow = "0 2px 8px rgba(0,0,0,0.2)";
-  return btn;
-}
-
-function createModal(): HTMLDivElement {
-  const modal = document.createElement("div");
-  modal.id = "steam-pricing-modal";
-  modal.style.position = "fixed";
-  modal.style.right = "12px";
-  modal.style.bottom = "60px";
-  modal.style.zIndex = "999999";
-  modal.style.minWidth = "300px";
-  modal.style.maxWidth = "420px";
-  modal.style.background = "#fff";
-  modal.style.color = "#111";
-  modal.style.border = "1px solid rgba(0,0,0,0.12)";
-  modal.style.borderRadius = "6px";
-  modal.style.boxShadow = "0 6px 20px rgba(0,0,0,0.2)";
-  modal.style.padding = "14px";
-  modal.style.fontSize = "13px";
-  modal.style.display = "none";
-  modal.style.fontFamily = "system-ui, -apple-system, sans-serif";
-  return modal;
-}
-
-async function getConfig() {
-  const defaults = {
-    positiveTiers: [5, 15, 30, 60],
-    negativeTiers: [-5, -15, -30, -60],
-  };
-  const cfg = (await storageGet(STORAGE_KEY_CONFIG)) || defaults;
-  return { ...defaults, ...cfg };
-}
-
 function interpretPercent(
   p: number,
   cfg: { positiveTiers: number[]; negativeTiers: number[] },
@@ -498,7 +352,9 @@ function renderResult(
       modal.appendChild(tableRow);
 
       // Modification: Displays Selected Currency ID vs Compared Currency ID
-      const targetCurrencyCode = pageInfo.symbol ? CURRENCY_MAP[pageInfo.symbol] : null;
+      const targetCurrencyCode = pageInfo.symbol
+        ? CURRENCY_MAP[pageInfo.symbol]
+        : null;
       const currencyInfoRow = document.createElement("div");
       currencyInfoRow.style.marginBottom = "12px";
       currencyInfoRow.style.padding = "6px 8px";
