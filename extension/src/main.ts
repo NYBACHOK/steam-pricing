@@ -23,6 +23,7 @@ interface ComparisonResult {
   price: number | null;
   percentFinal: number | null;
   percentOrig: number | null;
+  currencyCode?: number | null; // Tracks the ID of the currency used in comparison
 }
 
 interface ComparisonPage {
@@ -126,6 +127,7 @@ function findBestMatchForMethod(
     price: null,
     percentFinal: null,
     percentOrig: null,
+    currencyCode: null,
   };
 
   for (const entry of table) {
@@ -137,10 +139,7 @@ function findBestMatchForMethod(
     const prices = entry.currency_prices || [];
 
     for (const cp of prices) {
-      if (targetCurrencyCode && cp.currency_code !== targetCurrencyCode) {
-        continue;
-      }
-
+      // Modification: Removed restriction to targetCurrencyCode to scan all currencies
       const tablePrice = cp.price;
       if (!tablePrice) continue;
 
@@ -165,13 +164,14 @@ function findBestMatchForMethod(
             price: cand,
             percentFinal,
             percentOrig,
+            currencyCode: cp.currency_code,
           };
         }
       }
     }
 
-    // Fallback to USD price
-    if ((!targetCurrencyCode || targetCurrencyCode === 1) && entry.usd_price) {
+    // Fallback to top-level USD price if available
+    if (entry.usd_price) {
       const tablePrice = entry.usd_price;
       const candidates = [tablePrice, tablePrice / 100];
 
@@ -193,6 +193,7 @@ function findBestMatchForMethod(
             price: cand,
             percentFinal,
             percentOrig,
+            currencyCode: 1, // USD currency code
           };
         }
       }
@@ -378,19 +379,18 @@ function interpretPercent(
   }
 }
 
-// 3. Dynamic color mapping completely built off threshold configuration variables
 function getColorForPercent(
   p: number,
   cfg: { positiveTiers: number[]; negativeTiers: number[] },
 ): string {
   if (p >= 0) {
-    const colors = ["#7f8c8d", "#f1c40f", "#f39c12", "#e67e22", "#e74c3c"]; // Neutral, Soft warnings, Heavy warning
+    const colors = ["#7f8c8d", "#f1c40f", "#f39c12", "#e67e22", "#e74c3c"];
     const idx = cfg.positiveTiers.findIndex((t) => p < t);
     if (idx === -1) return colors[colors.length - 1];
     return colors[idx];
   } else {
     const abs = Math.abs(p);
-    const colors = ["#7f8c8d", "#52be80", "#27ae60", "#1e8449", "#117a65"]; // Neutral, Incremental green improvements
+    const colors = ["#7f8c8d", "#52be80", "#27ae60", "#1e8449", "#117a65"];
     const sortedNegatives = [...cfg.negativeTiers]
       .map(Math.abs)
       .sort((a, b) => a - b);
@@ -496,6 +496,21 @@ function renderResult(
         <span style="float:right;font-weight:600;">${tablePriceText}</span>
       `;
       modal.appendChild(tableRow);
+
+      // Modification: Displays Selected Currency ID vs Compared Currency ID
+      const targetCurrencyCode = pageInfo.symbol ? CURRENCY_MAP[pageInfo.symbol] : null;
+      const currencyInfoRow = document.createElement("div");
+      currencyInfoRow.style.marginBottom = "12px";
+      currencyInfoRow.style.padding = "6px 8px";
+      currencyInfoRow.style.background = "#f0f4f8";
+      currencyInfoRow.style.borderRadius = "4px";
+      currencyInfoRow.style.border = "1px solid #d0e0f0";
+      currencyInfoRow.style.fontSize = "11px";
+      currencyInfoRow.innerHTML = `
+        <div><strong>Selected Currency ID:</strong> ${targetCurrencyCode ?? "None/Unknown"}</div>
+        <div><strong>Compared Currency ID:</strong> ${bestMatch.currencyCode ?? "None/Unknown"}</div>
+      `;
+      modal.appendChild(currencyInfoRow);
 
       // Original price
       if (pageInfo.originalPrice !== null && bestMatch.percentOrig !== null) {
@@ -656,7 +671,7 @@ function renderSettings(
     });
 
     modal.innerHTML =
-      '<div style=\"text-align:center; padding: 20px; font-weight:600; color: #2ecc71;\">Settings Saved!</div>';
+      '<div style="text-align:center; padding: 20px; font-weight:600; color: #2ecc71;">Settings Saved!</div>';
     setTimeout(() => {
       modal.style.display = "none";
     }, 1200);
@@ -680,7 +695,6 @@ async function run() {
   document.body.appendChild(modal);
 
   btn.addEventListener("click", async () => {
-    // Toggle modal visibility
     modal.style.display = modal.style.display === "none" ? "block" : "none";
 
     if (modal.style.display === "none") {
@@ -689,37 +703,27 @@ async function run() {
 
     modal.innerHTML = "Loading...";
 
-    // Detect current page price
     const page = findPriceOnPage();
     if (!page) {
       modal.innerHTML = "Unable to detect price on this page.";
       return;
     }
 
-    // Load pricing table
     const table = await fetchPricingTable(false);
     if (!table) {
       modal.innerHTML = "Unable to load pricing table.";
       return;
     }
 
-    // Load user configuration
     const cfg = await getConfig();
 
-    // Resolve Steam currency code from detected symbol
     const targetCurrencyCode = page.symbol ? CURRENCY_MAP[page.symbol] : null;
 
-    // Build one comparison page for each conversion method:
-    // 1. Raw Conversion
-    // 2. Purchase Power
-    // 3. Default Multi Variable (default selected tab)
     const pages = buildComparisonPages(table, page, targetCurrencyCode);
 
-    // Render tabbed modal
     renderResult(modal, page, pages, cfg);
   });
 
-  // Warm cache in background
   void fetchPricingTable(false);
 }
 
