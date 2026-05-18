@@ -1,0 +1,215 @@
+/* Steam UAH Price Extension Styles */
+
+/* Extension Header */
+.steam-uah-extension-header {
+  background: linear-gradient(135deg, #1b2838 0%, #2a3f5f 100%);
+  border-bottom: 3px solid #1e90ff;
+  color: #ffffff;
+  padding: 20px;
+  margin: 0 0 20px 0;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.steam-uah-extension-header .header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.steam-uah-extension-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.steam-uah-extension-header p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.steam-uah-extension-header .refresh-btn,
+.steam-uah-extension-header .settings-btn {
+  background-color: #1e90ff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  margin-right: 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.steam-uah-extension-header .refresh-btn:hover,
+.steam-uah-extension-header .settings-btn:hover {
+  background-color: #1e7ff0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.steam-uah-extension-header .settings-btn {
+  background-color: #ff6b6b;
+}
+
+.steam-uah-extension-header .settings-btn:hover {
+  background-color: #ff5252;
+}
+
+/* Price Comparison Container */
+.steam-uah-comparison {
+  display: inline-block;
+  margin-left: 12px;
+  vertical-align: top;
+}
+
+/* Price Comparison Tooltip */
+.price-comparison-tooltip {
+  position: relative;
+  background: #f8f9fa;
+  border-left: 4px solid #1e90ff;
+  padding: 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  min-width: 280px;
+  max-width: 400px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.comparison-row {
+  display: flex;
+  align-items: center;
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+.comparison-row:first-child {
+  margin-top: 0;
+}
+
+.comparison-row:last-of-type {
+  margin-bottom: 8px;
+}
+
+.comparison-row .label {
+  min-width: 120px;
+  font-weight: 600;
+  color: #2c3e50;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.comparison-row .value {
+  color: #27ae60;
+  font-weight: 700;
+  font-size: 13px;
+  margin-right: 8px;
+  font-family: 'Courier New', monospace;
+}
+
+.comparison-row .diff {
+  font-weight: 700;
+  font-size: 12px;
+  min-width: 50px;
+  margin-right: 8px;
+}
+
+.comparison-row .interpretation {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #555;
+  flex-grow: 1;
+}
+
+/* Configuration Note */
+.config-note {
+  border-top: 1px solid #ddd;
+  margin-top: 8px;
+  padding-top: 8px;
+  font-size: 11px;
+  color: #666;
+  text-align: center;
+}
+
+/* Hover Effect for Tooltip */
+.steam-uah-comparison:hover .price-comparison-tooltip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  transition: all 0.2s ease;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .steam-uah-extension-header {
+    padding: 15px;
+  }
+
+  .steam-uah-extension-header .header-content {
+    font-size: 13px;
+  }
+
+  .price-comparison-tooltip {
+    min-width: 240px;
+    font-size: 11px;
+  }
+
+  .comparison-row .label {
+    min-width: 100px;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .price-comparison-tooltip {
+    background: #1e1e1e;
+    border-left-color: #1e90ff;
+    color: #e0e0e0;
+  }
+
+  .comparison-row .label {
+    color: #e0e0e0;
+  }
+
+  .comparison-row .value {
+    color: #66bb6a;
+  }
+
+  .comparison-row .interpretation {
+    background: rgba(255, 255, 255, 0.1);
+    color: #aaa;
+  }
+
+  .config-note {
+    border-top-color: #333;
+    color: #999;
+  }
+}
+
+/* Animation for new elements */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.steam-uah-comparison {
+  animation: slideIn 0.3s ease;
+}
+
+/* Print Styles */
+@media print {
+  .steam-uah-extension-header,
+  .steam-uah-comparison {
+    display: none;
+  }
+}

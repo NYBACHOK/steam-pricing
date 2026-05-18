@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Steam Pricing",
+  "version": "1.2",
+  "description": "Analyzes and compares Steam game prices",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://store.steampowered.com/app/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://store.steampowered.com/app/*"],
+      "js": ["dist/bundle.js"],
+      "css": ["styles.css"],
+      "run_at": "document_end"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "steam-pricing@steamprice.local",
+      "strict_min_version": "109.0"
+    }
+  }
+}

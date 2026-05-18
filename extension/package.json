@@ -1,0 +1,28 @@
+{
+  "name": "steam-price-diff-ext",
+  "version": "1.2.0",
+  "description": "Browser extension for comparing Steam prices with Ukrainian Hryvnia purchasing power parity",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --minify --sourcemap --platform=browser --target=chrome109 --outdir=dist",
+    "watch": "npm run build -- --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "steam",
+    "prices",
+    "ukrainian",
+    "hryvnia",
+    "ppp",
+    "purchasing-power-parity"
+  ],
+  "author": "NYBACHOK",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.1.40",
+    "@types/node": "^25.6.0",
+    "esbuild": "^0.28.0",
+    "playwright": "^1.48.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3"
+  }
+}

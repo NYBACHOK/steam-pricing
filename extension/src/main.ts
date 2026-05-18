@@ -1,0 +1,1 @@
+const PRICING_TABLE = 'https://raw.githubusercontent.com/NYBACHOK/steam-pricing/refs/heads/master/pricing_table.json'
