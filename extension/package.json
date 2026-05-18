@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "description": "Browser extension for comparing Steam prices with Ukrainian Hryvnia purchasing power parity",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --minify --sourcemap --platform=browser --target=chrome109 --outdir=dist",
+    "build": "esbuild src/main.ts --bundle --minify --sourcemap --platform=browser --target=chrome109 --outfile=dist/bundle.js",
     "watch": "npm run build -- --watch",
     "type-check": "tsc --noEmit"
   },
