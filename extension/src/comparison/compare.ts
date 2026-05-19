@@ -91,7 +91,7 @@ function percentDiff(actual: number, expected: number | null): number {
 }
 
 export async function priceCompare(
-  appId?: number | null,
+  appId: number,
 ): Promise<PriceCompareResult | null> {
   console.info("[Steam Pricing] priceCompare: starting comparison", { appId });
   const user_currency = priceCurrencyFromHtmlGet();

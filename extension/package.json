@@ -3,10 +3,11 @@
   "version": "1.2.0",
   "description": "Browser extension for comparing Steam prices",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --minify --sourcemap --platform=browser --target=chrome109 --outfile=dist/bundle.js",
-    "watch": "npm run build -- --watch",
+    "build": "esbuild src/main.ts --bundle --minify --sourcemap --platform=browser --target=es2024 --outfile=dist/bundle.js",
+    "watch": "pnpm run build -- --watch",
     "type-check": "tsc --noEmit",
-    "fmt": "pnpm prettier --write ./src"
+    "fmt": "pnpm prettier --write ./src",
+    "package": "pnpm run build && web-ext build --source-dir=. --overwrite-dest --artifacts-dir=./dist/web-ext"
   },
   "keywords": [
     "steam",
@@ -16,15 +17,19 @@
     "ppp",
     "purchasing-power-parity"
   ],
-  "author": "NYBACHOK",
+  "author": "NYBACHOK nybachok@proton.me",
   "license": "MIT",
+  "dependencies": {
+    "webextension-polyfill": "^0.12.0"
+  },
   "devDependencies": {
-    "@types/chrome": "^0.1.40",
     "@types/node": "^25.6.0",
+    "@types/webextension-polyfill": "^0.12.0",
     "esbuild": "^0.28.0",
     "playwright": "^1.48.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.3",
+    "web-ext": "^10.1",
     "prettier": "^3.8"
   }
 }

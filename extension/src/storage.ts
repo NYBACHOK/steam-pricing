@@ -1,17 +1,14 @@
+import Browser from "webextension-polyfill";
 import { STORAGE_KEY_CONFIG } from "./consts.ts";
 
 export function storageGet<T = any>(key: string): Promise<T | undefined> {
-  return new Promise((res) => {
-    chrome.storage.local.get([key], (out) => {
-      res(out[key] as T | undefined);
-    });
+  return Browser.storage.local.get([key]).then((out: Record<string, any>) => {
+    return out[key] as T | undefined;
   });
 }
 
 export function storageSet(key: string, value: any): Promise<void> {
-  return new Promise((res) => {
-    chrome.storage.local.set({ [key]: value }, () => res());
-  });
+  return Browser.storage.local.set({ [key]: value });
 }
 
 export async function getConfig() {

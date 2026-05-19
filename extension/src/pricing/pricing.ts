@@ -7,16 +7,6 @@ const GAME_PRICE_TTL = 24 * 60 * 60 * 1000; // 1 day
 
 const HTML_CURRENCY_ELEMENT_NAME = 'meta[itemprop="priceCurrency"]';
 
-/**
- * Extracts the numerical AppID from a standard Steam store URL structure:
- * https://store.steampowered.com/app/{APPID}/{GAME_NAME}/
- */
-function extractAppIdFromUrl(): number | null {
-  const url = typeof window !== "undefined" ? window.location.href : "";
-  const m = url.match(/\/app\/(\d+)/);
-  return m && m[1] ? parseInt(m[1], 10) : null;
-}
-
 export function priceCurrencyFromHtmlGet(
   html?: string,
 ): SteamCurrencyInfo | null {
@@ -50,17 +40,9 @@ export function priceCurrencyFromHtmlGet(
 }
 
 export async function gamePriceGet(
-  appId?: number | null,
+  appId: number,
   currency?: SteamCurrency | null,
 ): Promise<GamePriceResult | null> {
-  const id = appId ?? extractAppIdFromUrl();
-  if (!id) {
-    console.warn(
-      "[Steam Pricing] gamePriceGet: missing appId and unable to extract from URL",
-    );
-    return null;
-  }
-
   let finalCurrency: SteamCurrency = "USD";
   if (currency) {
     finalCurrency = currency;
@@ -90,9 +72,9 @@ export async function gamePriceGet(
     }
   }
 
-  const key = `steam_game_price_${id}_${finalCurrency}`;
+  const key = `steam_game_price_${appId}_${finalCurrency}`;
   console.info("[Steam Pricing] gamePriceGet: start", {
-    appId: id,
+    appId: appId,
     requestedCurrency: finalCurrency,
   });
 
@@ -112,7 +94,7 @@ export async function gamePriceGet(
 
   let result: GamePriceResult;
   try {
-    result = await steamGamePriceGet(id, finalCurrency);
+    result = await steamGamePriceGet(appId, finalCurrency);
     console.info(
       "[Steam Pricing] gamePriceGet: steamGamePriceGet returned",
       result,
@@ -121,7 +103,7 @@ export async function gamePriceGet(
     const message = err instanceof Error ? err.message : String(err);
     console.error("[Steam Pricing] gamePriceGet: steamGamePriceGet threw", err);
     return {
-      appId: id,
+      appId: appId,
       isFree: false,
       priceData: null,
       error: message,

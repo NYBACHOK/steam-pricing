@@ -1,3 +1,4 @@
+import "webextension-polyfill";
 import {
   getConversionMethodDescription,
   getConversionMethodName,
@@ -8,6 +9,7 @@ import {
   PriceCompareSummary,
 } from "./comparison/compare.ts";
 import { ConversionMethod } from "./comparison/fetch.ts";
+import Browser from "webextension-polyfill";
 
 type SerializedPriceCompare = {
   summary: PriceCompareSummary;
@@ -21,6 +23,11 @@ type PopupElements = {
 
 function isPopupPage(): boolean {
   return document.getElementById("steam-pricing-popup-root") !== null;
+}
+
+function extractAppIdFromActiveTab(url: string): number | null {
+  const m = url.match(/\/app\/(\d+)/);
+  return m && m[1] ? parseInt(m[1], 10) : null;
 }
 
 function formatLocalPrice(value: number | null, symbol: string): string {
@@ -129,7 +136,7 @@ function renderComparison(
 
 function queryActiveTabMessage(): Promise<SerializedPriceCompare> {
   return new Promise((resolve) => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    Browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
       console.info(
         "[Steam Pricing] queryActiveTabMessage: tabs returned",
         tabs,
@@ -143,26 +150,31 @@ function queryActiveTabMessage(): Promise<SerializedPriceCompare> {
         return;
       }
 
-      chrome.tabs.sendMessage(
-        tab.id,
-        { type: "STEAM_PRICE_COMPARE" },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.error(
-              "[Steam Pricing] queryActiveTabMessage: message send failed",
-              chrome.runtime.lastError,
-            );
-            resolve(null);
-            return;
-          }
+      const url = tab.url;
+      if (!url) {
+        console.warn(
+          "[Steam Pricing] queryActiveTabMessage: missing permission for url retrieval",
+        );
+        resolve(null);
+        return;
+      }
 
+      Browser.tabs
+        .sendMessage(tab.id, { type: "STEAM_PRICE_COMPARE", url: url })
+        .then((response: any) => {
           console.info(
             "[Steam Pricing] queryActiveTabMessage: response received",
             response,
           );
           resolve(response?.result ?? null);
-        },
-      );
+        })
+        .catch((error) => {
+          console.error(
+            "[Steam Pricing] queryActiveTabMessage: message send failed",
+            error,
+          );
+          resolve(null);
+        });
     });
   });
 }
@@ -178,37 +190,38 @@ async function initPopup() {
   renderComparison(result, { status, results });
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+Browser.runtime.onMessage.addListener(async (message: any) => {
   console.info("[Steam Pricing] onMessage: received message", message);
   if (message?.type !== "STEAM_PRICE_COMPARE") {
-    return false;
+    return;
   }
 
-  (async () => {
-    try {
-      const compareResult = await priceCompare();
-      console.info(
-        "[Steam Pricing] onMessage: comparison result",
-        compareResult,
+  try {
+    const appId = extractAppIdFromActiveTab(message.url ?? "");
+    if (!appId) {
+      console.warn(
+        "[Steam Pricing] gamePriceGet: missing appId and unable to extract from URL",
       );
-      const rows = compareResult?.comparisons
-        ? Object.fromEntries(Array.from(compareResult.comparisons))
-        : null;
-      sendResponse({
-        result: compareResult
-          ? {
-              summary: compareResult.summary,
-              rows,
-            }
-          : null,
-      });
-    } catch (error) {
-      console.error("[Steam Pricing] onMessage: compare failed", error);
-      sendResponse({ result: null });
+      return { result: null };
     }
-  })();
 
-  return true;
+    const compareResult = await priceCompare(appId);
+    console.info("[Steam Pricing] onMessage: comparison result", compareResult);
+    const rows = compareResult?.comparisons
+      ? Object.fromEntries(Array.from(compareResult.comparisons))
+      : null;
+    return {
+      result: compareResult
+        ? {
+            summary: compareResult.summary,
+            rows,
+          }
+        : null,
+    };
+  } catch (error) {
+    console.error("[Steam Pricing] onMessage: compare failed", error);
+    return { result: null };
+  }
 });
 
 if (isPopupPage()) {
