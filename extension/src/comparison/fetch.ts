@@ -1,7 +1,5 @@
 import { storageGet, storageSet } from "../storage";
-
-const PRICING_TABLE =
-  "https://raw.githubusercontent.com/NYBACHOK/steam-pricing/master/pricing_table.json";
+import pricingTable from "../../pricing_table.json";
 
 export const STORAGE_KEY = "steam_pricing_cache_v1";
 export const TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -31,18 +29,8 @@ export async function fetchPricingTable(
       return cached.data;
     }
 
-    console.info("[Steam Pricing] fetchPricingTable: fetching remote table", {
-      url: PRICING_TABLE,
-    });
-    const resp = await fetch(PRICING_TABLE);
-    if (!resp.ok) {
-      console.warn("[Steam Pricing] fetchPricingTable: response not ok", {
-        status: resp.status,
-        statusText: resp.statusText,
-      });
-      return null;
-    }
-    const data = (await resp.json()) as PricingEntry[];
+    console.info("[Steam Pricing] fetchPricingTable: loading local pricing table");
+    const data = pricingTable as PricingEntry[];
     console.info("[Steam Pricing] fetchPricingTable: loaded data", {
       length: data?.length,
     });
@@ -53,7 +41,7 @@ export async function fetchPricingTable(
     }
     return data;
   } catch (e) {
-    console.warn("failed to fetch pricing table", e);
+    console.warn("failed to load pricing table", e);
     return null;
   }
 }
