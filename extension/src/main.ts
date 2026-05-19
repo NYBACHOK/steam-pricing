@@ -42,7 +42,18 @@ function formatLocalPrice(value: number | null, symbol: string): string {
   return `${symbol}${formatted}`;
 }
 
-function renderSummary(summary: PriceCompareSummary): string {
+function createTextElement(
+  tagName: string,
+  text: string,
+  className?: string,
+): HTMLElement {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = text;
+  return element;
+}
+
+function renderSummary(summary: PriceCompareSummary): HTMLElement {
   const userOriginalDisplay =
     summary.userOriginalFormatted ||
     formatLocalPrice(summary.userOriginal, summary.userCurrency.symbol) ||
@@ -52,25 +63,42 @@ function renderSummary(summary: PriceCompareSummary): string {
     formatLocalPrice(summary.usdOriginal, "$") ||
     "N/A";
 
-  return `
-    <div class="comparison-summary">
-      <div class="comparison-summary-item">
-        <span class="comparison-label">USD final price:</span>
-        <span class="comparison-value">${usdOriginalDisplay || "N/A"}</span>
-      </div>
-      <div class="comparison-summary-item">
-        <span class="comparison-label">Original price (${summary.userCurrency.code}):</span>
-        <span class="comparison-value">${userOriginalDisplay}</span>
-      </div>
-    </div>
-  `;
+  const summaryContainer = document.createElement("div");
+  summaryContainer.className = "comparison-summary";
+
+  const usdRow = document.createElement("div");
+  usdRow.className = "comparison-summary-item";
+  usdRow.appendChild(
+    createTextElement("span", "USD final price:", "comparison-label"),
+  );
+  usdRow.appendChild(
+    createTextElement("span", usdOriginalDisplay || "N/A", "comparison-value"),
+  );
+
+  const originalRow = document.createElement("div");
+  originalRow.className = "comparison-summary-item";
+  originalRow.appendChild(
+    createTextElement(
+      "span",
+      `Original price (${summary.userCurrency.code}):`,
+      "comparison-label",
+    ),
+  );
+  originalRow.appendChild(
+    createTextElement("span", userOriginalDisplay, "comparison-value"),
+  );
+
+  summaryContainer.appendChild(usdRow);
+  summaryContainer.appendChild(originalRow);
+
+  return summaryContainer;
 }
 
 function renderRow(
   method: ConversionMethod,
   result: ComparingResult,
   currencySymbol: string,
-): string {
+): HTMLElement {
   const title = getConversionMethodName(method);
   const description = getConversionMethodDescription(method);
   const discount =
@@ -90,18 +118,34 @@ function renderRow(
     currencySymbol,
   );
 
-  return `
-    <div class="comparison-card">
-      <div class="comparison-card-header">${title}</div>
-      <div class="comparison-card-description">${description}</div>
-      <div class="comparison-card-values">
-        <div><span class="comparison-label">Discount diff:</span> <span class="comparison-value">${discount}</span></div>
-        <div><span class="comparison-label">Original diff:</span> <span class="comparison-value">${original}</span></div>
-        <div><span class="comparison-label">Valve final:</span> <span class="comparison-value">${recommendedFinal}</span></div>
-        <div><span class="comparison-label">Valve original:</span> <span class="comparison-value">${recommendedOriginal}</span></div>
-      </div>
-    </div>
-  `;
+  const card = document.createElement("div");
+  card.className = "comparison-card";
+
+  card.appendChild(createTextElement("div", title, "comparison-card-header"));
+  card.appendChild(
+    createTextElement("div", description, "comparison-card-description"),
+  );
+
+  const valuesContainer = document.createElement("div");
+  valuesContainer.className = "comparison-card-values";
+
+  const makeValueRow = (label: string, value: string) => {
+    const row = document.createElement("div");
+    row.appendChild(createTextElement("span", label, "comparison-label"));
+    row.appendChild(document.createTextNode(" "));
+    row.appendChild(createTextElement("span", value, "comparison-value"));
+    return row;
+  };
+
+  valuesContainer.appendChild(makeValueRow("Discount diff:", discount));
+  valuesContainer.appendChild(makeValueRow("Original diff:", original));
+  valuesContainer.appendChild(makeValueRow("Valve final:", recommendedFinal));
+  valuesContainer.appendChild(
+    makeValueRow("Valve original:", recommendedOriginal),
+  );
+
+  card.appendChild(valuesContainer);
+  return card;
 }
 
 function renderComparison(
@@ -119,18 +163,16 @@ function renderComparison(
     .map((key) => Number(key) as ConversionMethod)
     .sort((a, b) => a - b);
 
-  elements.results.innerHTML = `
-    ${renderSummary(result.summary)}
-    ${sortedMethods
-      .map((method) => {
-        const row = rows[method.toString()];
-        if (!row) {
-          return "";
-        }
-        return renderRow(method, row, result.summary.userCurrency.symbol);
-      })
-      .join("\n")}
-  `;
+  elements.results.textContent = "";
+  elements.results.appendChild(renderSummary(result.summary));
+  sortedMethods.forEach((method) => {
+    const row = rows[method.toString()];
+    if (!row) return;
+    elements.results.appendChild(
+      renderRow(method, row, result.summary.userCurrency.symbol),
+    );
+  });
+
   elements.status.textContent = "";
 }
 

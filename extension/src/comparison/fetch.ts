@@ -29,7 +29,9 @@ export async function fetchPricingTable(
       return cached.data;
     }
 
-    console.info("[Steam Pricing] fetchPricingTable: loading local pricing table");
+    console.info(
+      "[Steam Pricing] fetchPricingTable: loading local pricing table",
+    );
     const data = pricingTable as PricingEntry[];
     console.info("[Steam Pricing] fetchPricingTable: loaded data", {
       length: data?.length,
