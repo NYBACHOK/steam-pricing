@@ -44,11 +44,11 @@ const CURRENCY_TO_COUNTRY_MAP: Record<SteamCurrency, string> = {
   CRC: "cr", // Costa Rican Colón
   UYU: "uy", // Uruguayan Peso
   PLN: "pl", // Polish zloty
-  TWD: "tw"  // Taiwan New Dollar
+  TWD: "tw", // Taiwan New Dollar
 };
 
 export interface SteamPriceOverview {
-  currency: string;
+  currency: SteamCurrency;
   initial: number; // Price in cents/lowest denomination (e.g., 999 = $9.99)
   final: number; // Discounted price in cents/lowest denomination
   discount_percent: number;
@@ -56,7 +56,7 @@ export interface SteamPriceOverview {
   final_formatted: string; // Formatted with sign
 }
 
-export interface SteamAppDetailsSuccess {
+interface SteamAppDetailsSuccess {
   success: true;
   data: {
     price_overview?: SteamPriceOverview;

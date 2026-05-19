@@ -28,27 +28,11 @@ export function getConversionMethodDescription(
   }
 }
 
-/**
- * Extracts the numerical AppID from a standard Steam store URL structure:
- * https://store.steampowered.com/app/{APPID}/{GAME_NAME}/
- */
-function extractSteamAppId(): number | null {
-  const url = window.location.href;
-  // Match "/app/" followed by a sequence of digits
-  const match = url.match(/\/app\/(\d+)/);
-  
-  if (match && match[1]) {
-    return parseInt(match[1], 10);
-  }
-  return null;
-}
-
 export function extractCurrencySymbol(text: string): string | null {
   if (!text) return null;
   const symbol = text.replace(/[0-9.,\s\u00A0-]/g, "").trim();
   return symbol || null;
 }
-
 
 const PRICE_SELECTORS = [
   ".discount_final_price",
@@ -73,7 +57,7 @@ export function currencyFromPageGet(html?: string): string | null {
   }
 
   const fallbackElements = Array.from(
-    doc.querySelectorAll<HTMLElement>("[class*=\"price\"]"),
+    doc.querySelectorAll<HTMLElement>('[class*="price"]'),
   );
 
   for (const element of fallbackElements) {
@@ -85,4 +69,3 @@ export function currencyFromPageGet(html?: string): string | null {
 
   return null;
 }
-
