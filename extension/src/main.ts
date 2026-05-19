@@ -1,588 +1,207 @@
 import {
-  CURRENCY_MAP,
-  PRICING_TABLE,
-  STORAGE_KEY,
-  STORAGE_KEY_CONFIG,
-  TTL,
-} from "./consts.ts";
-import { getConfig, storageGet, storageSet } from "./storage.ts";
-import {
-  ConversionMethod,
-  PricingEntry,
-  PagePrice,
-  ComparisonResult,
-  ComparisonPage,
-} from "./types.ts";
-import { buildButton, createModal } from "./ui.ts";
-import {
   getConversionMethodDescription,
   getConversionMethodName,
-  currencyFromPageGet,
 } from "./utils.ts";
+import {
+  priceCompare,
+  ComparingResult,
+  PriceCompareSummary,
+} from "./comparison/compare.ts";
+import { ConversionMethod } from "./comparison/fetch.ts";
 
-function findBestMatchForMethod(
-  table: PricingEntry[],
-  page: PagePrice,
-  _targetCurrencyCode: number | null,
+type SerializedPriceCompare = {
+  summary: PriceCompareSummary;
+  rows: Record<string, ComparingResult> | null;
+} | null;
+
+type PopupElements = {
+  status: HTMLElement;
+  results: HTMLElement;
+};
+
+function isPopupPage(): boolean {
+  return document.getElementById("steam-pricing-popup-root") !== null;
+}
+
+function formatLocalPrice(value: number | null, symbol: string): string {
+  if (value == null) {
+    return "N/A";
+  }
+
+  const amount = value / 100;
+  const formatted = Number.isInteger(amount)
+    ? amount.toFixed(0)
+    : amount.toFixed(2);
+  return `${symbol}${formatted}`;
+}
+
+function renderSummary(summary: PriceCompareSummary): string {
+  return `
+    <div class="comparison-summary">
+      <div class="comparison-summary-item">
+        <span class="comparison-label">USD final price:</span>
+        <span class="comparison-value">${summary.usdFinalFormatted}</span>
+      </div>
+      <div class="comparison-summary-item">
+        <span class="comparison-label">Original price (${summary.userCurrency.code}):</span>
+        <span class="comparison-value">${summary.userOriginalFormatted ?? "N/A"}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderRow(
   method: ConversionMethod,
-): ComparisonResult {
-  let best: ComparisonResult = {
-    entry: null,
-    price: null,
-    percentFinal: null,
-    percentOrig: null,
-    currencyCode: null,
-  };
-
-  for (const entry of table) {
-    // Only use entries for the requested conversion method
-    if ((entry.convert_method ?? 3) !== method) {
-      continue;
-    }
-
-    const prices = entry.currency_prices || [];
-
-    for (const cp of prices) {
-      // Modification: Removed restriction to targetCurrencyCode to scan all currencies
-      const tablePrice = cp.price;
-      if (!tablePrice) continue;
-
-      // Some prices are stored in cents
-      const candidates = [tablePrice, tablePrice / 100];
-
-      for (const cand of candidates) {
-        if (cand <= 0) continue;
-
-        const percentFinal = ((page.finalPrice - cand) / cand) * 100;
-        const percentOrig =
-          page.originalPrice !== null
-            ? ((page.originalPrice - cand) / cand) * 100
-            : null;
-
-        if (
-          best.percentFinal == null ||
-          Math.abs(percentFinal) < Math.abs(best.percentFinal)
-        ) {
-          best = {
-            entry,
-            price: cand,
-            percentFinal,
-            percentOrig,
-            currencyCode: cp.currency_code,
-          };
-        }
-      }
-    }
-
-    // Fallback to top-level USD price if available
-    if (entry.usd_price) {
-      const tablePrice = entry.usd_price;
-      const candidates = [tablePrice, tablePrice / 100];
-
-      for (const cand of candidates) {
-        if (cand <= 0) continue;
-
-        const percentFinal = ((page.finalPrice - cand) / cand) * 100;
-        const percentOrig =
-          page.originalPrice !== null
-            ? ((page.originalPrice - cand) / cand) * 100
-            : null;
-
-        if (
-          best.percentFinal == null ||
-          Math.abs(percentFinal) < Math.abs(best.percentFinal)
-        ) {
-          best = {
-            entry,
-            price: cand,
-            percentFinal,
-            percentOrig,
-            currencyCode: 1, // USD currency code
-          };
-        }
-      }
-    }
-  }
-
-  return best;
-}
-
-function buildComparisonPages(
-  table: PricingEntry[],
-  page: PagePrice,
-  targetCurrencyCode: number | null,
-): ComparisonPage[] {
-  const methods: ConversionMethod[] = [1, 2, 3];
-
-  return methods.map((method) => ({
-    method,
-    title: getConversionMethodName(method),
-    description: getConversionMethodDescription(method),
-    result: findBestMatchForMethod(table, page, targetCurrencyCode, method),
-  }));
-}
-
-async function fetchPricingTable(
-  force = false,
-): Promise<PricingEntry[] | null> {
-  try {
-    const cached = await storageGet<{ ts: number; data: PricingEntry[] }>(
-      STORAGE_KEY,
-    );
-    if (!force && cached && Date.now() - (cached.ts || 0) < TTL) {
-      return cached.data;
-    }
-
-    const resp = await fetch(PRICING_TABLE);
-    if (!resp.ok) return null;
-    const data = (await resp.json()) as PricingEntry[];
-    await storageSet(STORAGE_KEY, { ts: Date.now(), data });
-    return data;
-  } catch (e) {
-    console.warn("failed to fetch pricing table", e);
-    return null;
-  }
-}
-
-function parsePriceText(text: string): number | null {
-  if (!text) return null;
-  const cleaned = text.replace(/[\s\u00A0]/g, "").replace(/[^0-9.,-]/g, "");
-  if (!cleaned) return null;
-  const withDot = cleaned.replace(/,([0-9]{2})$/, ".$1").replace(/,/g, "");
-  const n = parseFloat(withDot);
-  return Number.isFinite(n) ? n : null;
-}
-
-function findPriceOnPage(): PagePrice | null {
-  const pageCurrency = currencyFromPageGet();
-
-  const finalEl =
-    document.querySelector(".discount_final_price") ||
-    document.querySelector(".game_purchase_price") ||
-    document.querySelector(".price");
-  const origEl = document.querySelector(".discount_original_price");
-
-  if (finalEl && (finalEl as HTMLElement).offsetParent !== null) {
-    const finalTxt = finalEl.textContent || "";
-    const finalVal = parsePriceText(finalTxt);
-
-    let origVal: number | null = null;
-    let origTxt: string | null = null;
-
-    if (origEl && (origEl as HTMLElement).offsetParent !== null) {
-      origTxt = origEl.textContent || "";
-      origVal = parsePriceText(origTxt);
-    }
-
-    if (finalVal !== null) {
-      return {
-        finalPrice: finalVal,
-        finalRaw: finalTxt.trim(),
-        originalPrice: origVal,
-        originalRaw: origTxt?.trim() || null,
-        symbol: pageCurrency,
-      };
-    }
-  }
-
-  const els = Array.from(
-    document.querySelectorAll('[class*=\"price\"]'),
-  ) as HTMLElement[];
-  for (const el of els) {
-    if (el && el.offsetParent !== null) {
-      const txt = el.textContent || "";
-      const v = parsePriceText(txt);
-      if (v !== null) {
-        return {
-          finalPrice: v,
-          finalRaw: txt.trim(),
-          originalPrice: null,
-          originalRaw: null,
-          symbol: pageCurrency,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-function interpretPercent(
-  p: number,
-  cfg: { positiveTiers: number[]; negativeTiers: number[] },
-) {
-  if (p >= 0) {
-    const idx = cfg.positiveTiers.findIndex((t) => p < t);
-    return {
-      tier: idx === -1 ? cfg.positiveTiers.length : idx + 1,
-      label:
-        idx === -1 ? "Huge increase" : `+${cfg.positiveTiers[idx]}% threshold`,
-    };
-  } else {
-    const abs = Math.abs(p);
-    const sortedNegatives = [...cfg.negativeTiers]
-      .map(Math.abs)
-      .sort((a, b) => a - b);
-    const idx = sortedNegatives.findIndex((t) => abs < t);
-    return {
-      tier: idx === -1 ? cfg.negativeTiers.length : idx + 1,
-      label: idx === -1 ? "Huge drop" : `-${sortedNegatives[idx]}% threshold`,
-    };
-  }
-}
-
-function getColorForPercent(
-  p: number,
-  cfg: { positiveTiers: number[]; negativeTiers: number[] },
+  result: ComparingResult,
+  currencySymbol: string,
 ): string {
-  if (p >= 0) {
-    const colors = ["#7f8c8d", "#f1c40f", "#f39c12", "#e67e22", "#e74c3c"];
-    const idx = cfg.positiveTiers.findIndex((t) => p < t);
-    if (idx === -1) return colors[colors.length - 1];
-    return colors[idx];
-  } else {
-    const abs = Math.abs(p);
-    const colors = ["#7f8c8d", "#52be80", "#27ae60", "#1e8449", "#117a65"];
-    const sortedNegatives = [...cfg.negativeTiers]
-      .map(Math.abs)
-      .sort((a, b) => a - b);
-    const idx = sortedNegatives.findIndex((t) => abs < t);
-    if (idx === -1) return colors[colors.length - 1];
-    return colors[idx];
+  const title = getConversionMethodName(method);
+  const description = getConversionMethodDescription(method);
+  const discount =
+    result.discount_diff >= 0
+      ? `+${result.discount_diff}%`
+      : `${result.discount_diff}%`;
+  const original =
+    result.original_diff >= 0
+      ? `+${result.original_diff}%`
+      : `${result.original_diff}%`;
+  const recommendedFinal = formatLocalPrice(
+    result.recommended_final_price,
+    currencySymbol,
+  );
+  const recommendedOriginal = formatLocalPrice(
+    result.recommended_original_price,
+    currencySymbol,
+  );
+
+  return `
+    <div class="comparison-card">
+      <div class="comparison-card-header">${title}</div>
+      <div class="comparison-card-description">${description}</div>
+      <div class="comparison-card-values">
+        <div><span class="comparison-label">Discount diff:</span> <span class="comparison-value">${discount}</span></div>
+        <div><span class="comparison-label">Original diff:</span> <span class="comparison-value">${original}</span></div>
+        <div><span class="comparison-label">Valve recommended final:</span> <span class="comparison-value">${recommendedFinal}</span></div>
+        <div><span class="comparison-label">Valve recommended original:</span> <span class="comparison-value">${recommendedOriginal}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderComparison(
+  result: SerializedPriceCompare,
+  elements: PopupElements,
+) {
+  if (!result || !result.rows || !result.summary) {
+    elements.status.textContent =
+      "Unable to compare prices. Please open a Steam app page first.";
+    return;
   }
+
+  const rows = result.rows ?? {};
+  const sortedMethods = Object.keys(rows)
+    .map((key) => Number(key) as ConversionMethod)
+    .sort((a, b) => a - b);
+
+  elements.results.innerHTML = `
+    ${renderSummary(result.summary)}
+    ${sortedMethods
+      .map((method) => {
+        const row = rows[method.toString()];
+        if (!row) {
+          return "";
+        }
+        return renderRow(method, row, result.summary.userCurrency.symbol);
+      })
+      .join("\n")}
+  `;
+  elements.status.textContent = "Comparison ready.";
 }
 
-function renderResult(
-  modal: HTMLDivElement,
-  pageInfo: PagePrice,
-  pages: ComparisonPage[],
-  cfg: { positiveTiers: number[]; negativeTiers: number[] },
-) {
-  modal.innerHTML = "";
-
-  let activePageIndex = pages.findIndex((p) => p.method === 3);
-  if (activePageIndex === -1) activePageIndex = 0;
-
-  const renderPage = () => {
-    modal.innerHTML = "";
-
-    const page = pages[activePageIndex];
-
-    // Title
-    const title = document.createElement("div");
-    title.style.fontWeight = "700";
-    title.style.marginBottom = "12px";
-    title.style.fontSize = "14px";
-    title.textContent = "Steam Price Comparison";
-    modal.appendChild(title);
-
-    // Tabs
-    const tabs = document.createElement("div");
-    tabs.style.display = "flex";
-    tabs.style.gap = "4px";
-    tabs.style.marginBottom = "12px";
-
-    pages.forEach((p, index) => {
-      const tab = document.createElement("button");
-      tab.textContent = p.title;
-      tab.style.flex = "1";
-      tab.style.padding = "6px 8px";
-      tab.style.fontSize = "11px";
-      tab.style.border = "1px solid #ccd0d5";
-      tab.style.borderRadius = "4px";
-      tab.style.cursor = "pointer";
-      tab.style.fontWeight = "600";
-
-      if (index === activePageIndex) {
-        tab.style.background = "#1e90ff";
-        tab.style.color = "#fff";
-        tab.style.borderColor = "#1e90ff";
-      } else {
-        tab.style.background = "#f5f6f7";
-        tab.style.color = "#111";
+function queryActiveTabMessage(): Promise<SerializedPriceCompare> {
+  return new Promise((resolve) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      console.info(
+        "[Steam Pricing] queryActiveTabMessage: tabs returned",
+        tabs,
+      );
+      const tab = tabs[0];
+      if (!tab?.id) {
+        console.warn(
+          "[Steam Pricing] queryActiveTabMessage: no active tab or missing tab id",
+        );
+        resolve(null);
+        return;
       }
 
-      tab.addEventListener("click", () => {
-        activePageIndex = index;
-        renderPage();
-      });
+      chrome.tabs.sendMessage(
+        tab.id,
+        { type: "STEAM_PRICE_COMPARE" },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            console.error(
+              "[Steam Pricing] queryActiveTabMessage: message send failed",
+              chrome.runtime.lastError,
+            );
+            resolve(null);
+            return;
+          }
 
-      tabs.appendChild(tab);
+          console.info(
+            "[Steam Pricing] queryActiveTabMessage: response received",
+            response,
+          );
+          resolve(response?.result ?? null);
+        },
+      );
     });
+  });
+}
 
-    modal.appendChild(tabs);
+async function initPopup() {
+  const status = document.getElementById("status");
+  const results = document.getElementById("results");
+  if (!status || !results) return;
 
-    // Description
-    const desc = document.createElement("div");
-    desc.style.fontSize = "12px";
-    desc.style.color = "#666";
-    desc.style.marginBottom = "12px";
-    desc.style.fontStyle = "italic";
-    desc.textContent = page.description;
-    modal.appendChild(desc);
+  status.textContent =
+    "Requesting price comparison from the active Steam tab...";
+  const result = await queryActiveTabMessage();
+  renderComparison(result, { status, results });
+}
 
-    const bestMatch = page.result;
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  console.info("[Steam Pricing] onMessage: received message", message);
+  if (message?.type !== "STEAM_PRICE_COMPARE") {
+    return false;
+  }
 
-    if (
-      !bestMatch.entry ||
-      bestMatch.price == null ||
-      bestMatch.percentFinal == null
-    ) {
-      const noinfo = document.createElement("div");
-      noinfo.textContent = "No matching pricing entry found in the table.";
-      noinfo.style.marginBottom = "12px";
-      modal.appendChild(noinfo);
-    } else {
-      const tablePriceText = `${bestMatch.price.toFixed(2)} ${
-        pageInfo.symbol || ""
-      }`;
-
-      const tableRow = document.createElement("div");
-      tableRow.style.marginBottom = "12px";
-      tableRow.style.padding = "6px 8px";
-      tableRow.style.background = "#f8f9fa";
-      tableRow.style.borderRadius = "4px";
-      tableRow.style.border = "1px solid #e9ecef";
-      tableRow.innerHTML = `
-        <strong>Base Table Price:</strong>
-        <span style="float:right;font-weight:600;">${tablePriceText}</span>
-      `;
-      modal.appendChild(tableRow);
-
-      // Modification: Displays Selected Currency ID vs Compared Currency ID
-      const targetCurrencyCode = pageInfo.symbol
-        ? CURRENCY_MAP[pageInfo.symbol]
+  (async () => {
+    try {
+      const compareResult = await priceCompare();
+      console.info(
+        "[Steam Pricing] onMessage: comparison result",
+        compareResult,
+      );
+      const rows = compareResult?.comparisons
+        ? Object.fromEntries(Array.from(compareResult.comparisons))
         : null;
-      const currencyInfoRow = document.createElement("div");
-      currencyInfoRow.style.marginBottom = "12px";
-      currencyInfoRow.style.padding = "6px 8px";
-      currencyInfoRow.style.background = "#f0f4f8";
-      currencyInfoRow.style.borderRadius = "4px";
-      currencyInfoRow.style.border = "1px solid #d0e0f0";
-      currencyInfoRow.style.fontSize = "11px";
-      currencyInfoRow.innerHTML = `
-        <div><strong>Selected Currency ID:</strong> ${targetCurrencyCode ?? "None/Unknown"}</div>
-        <div><strong>Compared Currency ID:</strong> ${bestMatch.currencyCode ?? "None/Unknown"}</div>
-      `;
-      modal.appendChild(currencyInfoRow);
-
-      // Original price
-      if (pageInfo.originalPrice !== null && bestMatch.percentOrig !== null) {
-        const origColor = getColorForPercent(bestMatch.percentOrig, cfg);
-
-        const origRow = document.createElement("div");
-        origRow.style.marginBottom = "8px";
-        origRow.innerHTML = `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
-            <span><strong>Original:</strong> ${pageInfo.originalRaw}</span>
-            <span style="
-              color:white;
-              font-weight:bold;
-              background:${origColor};
-              padding:2px 8px;
-              border-radius:12px;
-              font-size:11px;
-              min-width:52px;
-              text-align:center;
-            ">
-              ${bestMatch.percentOrig > 0 ? "+" : ""}${bestMatch.percentOrig.toFixed(1)}%
-            </span>
-          </div>
-        `;
-        modal.appendChild(origRow);
-      }
-
-      // Final price
-      const finalColor = getColorForPercent(bestMatch.percentFinal, cfg);
-
-      const finalRow = document.createElement("div");
-      finalRow.style.marginBottom = "12px";
-      finalRow.innerHTML = `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;">
-          <span><strong>Current:</strong> ${pageInfo.finalRaw}</span>
-          <span style="
-            color:white;
-            font-weight:bold;
-            background:${finalColor};
-            padding:2px 8px;
-            border-radius:12px;
-            font-size:11px;
-            min-width:52px;
-            text-align:center;
-          ">
-            ${bestMatch.percentFinal > 0 ? "+" : ""}${bestMatch.percentFinal.toFixed(1)}%
-          </span>
-        </div>
-      `;
-      modal.appendChild(finalRow);
-
-      const interp = interpretPercent(bestMatch.percentFinal, cfg);
-
-      const interpRow = document.createElement("div");
-      interpRow.style.marginTop = "8px";
-      interpRow.style.color = "#666";
-      interpRow.style.fontSize = "12px";
-      interpRow.style.fontStyle = "italic";
-      interpRow.textContent = `Status: ${interp.label} (tier ${interp.tier})`;
-      modal.appendChild(interpRow);
+      sendResponse({
+        result: compareResult
+          ? {
+              summary: compareResult.summary,
+              rows,
+            }
+          : null,
+      });
+    } catch (error) {
+      console.error("[Steam Pricing] onMessage: compare failed", error);
+      sendResponse({ result: null });
     }
+  })();
 
-    // Settings button
-    const settingsLink = document.createElement("button");
-    settingsLink.textContent = "⚙️ Configure Thresholds";
-    settingsLink.style.display = "block";
-    settingsLink.style.marginTop = "14px";
-    settingsLink.style.width = "100%";
-    settingsLink.style.padding = "8px 10px";
-    settingsLink.style.background = "#f5f6f7";
-    settingsLink.style.color = "#111";
-    settingsLink.style.border = "1px solid #ccd0d5";
-    settingsLink.style.borderRadius = "4px";
-    settingsLink.style.cursor = "pointer";
-    settingsLink.style.fontSize = "12px";
-    settingsLink.style.fontWeight = "600";
+  return true;
+});
 
-    settingsLink.addEventListener("click", () => {
-      renderSettings(modal, cfg);
-    });
-
-    modal.appendChild(settingsLink);
-  };
-
-  renderPage();
-}
-
-function renderSettings(
-  modal: HTMLDivElement,
-  cfg: { positiveTiers: number[]; negativeTiers: number[] },
-) {
-  modal.innerHTML = "";
-  const title = document.createElement("div");
-  title.style.fontWeight = "700";
-  title.style.marginBottom = "12px";
-  title.textContent = "Configure percent tiers (4 values each)";
-  modal.appendChild(title);
-
-  const posLabel = document.createElement("div");
-  posLabel.textContent = "Positive tiers (ascending %):";
-  posLabel.style.fontWeight = "600";
-  posLabel.style.marginBottom = "4px";
-  modal.appendChild(posLabel);
-
-  const posInput = document.createElement("input");
-  posInput.value = cfg.positiveTiers.join(",");
-  posInput.style.width = "100%";
-  posInput.style.padding = "6px";
-  posInput.style.boxSizing = "border-box";
-  posInput.style.border = "1px solid #ccc";
-  posInput.style.borderRadius = "4px";
-  posInput.style.marginBottom = "12px";
-  modal.appendChild(posInput);
-
-  const negLabel = document.createElement("div");
-  negLabel.textContent = "Negative tiers (ascending absolute %):";
-  negLabel.style.fontWeight = "600";
-  negLabel.style.marginBottom = "4px";
-  modal.appendChild(negLabel);
-
-  const negInput = document.createElement("input");
-  negInput.value = cfg.negativeTiers.join(",");
-  negInput.style.width = "100%";
-  negInput.style.padding = "6px";
-  negInput.style.boxSizing = "border-box";
-  negInput.style.border = "1px solid #ccc";
-  negInput.style.borderRadius = "4px";
-  negInput.style.marginBottom = "14px";
-  modal.appendChild(negInput);
-
-  const btnContainer = document.createElement("div");
-  btnContainer.style.display = "flex";
-  btnContainer.style.gap = "8px";
-
-  const saveBtn = document.createElement("button");
-  saveBtn.textContent = "Save Settings";
-  saveBtn.style.flex = "1";
-  saveBtn.style.padding = "8px";
-  saveBtn.style.background = "#1e90ff";
-  saveBtn.style.color = "white";
-  saveBtn.style.border = "none";
-  saveBtn.style.borderRadius = "4px";
-  saveBtn.style.cursor = "pointer";
-  saveBtn.style.fontWeight = "600";
-
-  saveBtn.addEventListener("click", async () => {
-    const p = posInput.value
-      .split(",")
-      .map((s) => parseFloat(s.trim()))
-      .filter((n) => !isNaN(n));
-    const n = negInput.value
-      .split(",")
-      .map((s) => parseFloat(s.trim()))
-      .filter((n) => !isNaN(n));
-    await storageSet(STORAGE_KEY_CONFIG, {
-      positiveTiers: p,
-      negativeTiers: n,
-    });
-
-    modal.innerHTML =
-      '<div style="text-align:center; padding: 20px; font-weight:600; color: #2ecc71;">Settings Saved!</div>';
-    setTimeout(() => {
-      modal.style.display = "none";
-    }, 1200);
-  });
-
-  btnContainer.appendChild(saveBtn);
-  modal.appendChild(btnContainer);
-}
-
-async function run() {
-  const existingBtn = document.getElementById("steam-pricing-compare-btn");
-  const existingModal = document.getElementById("steam-pricing-modal");
-
-  if (existingBtn) existingBtn.remove();
-  if (existingModal) existingModal.remove();
-
-  const btn = buildButton();
-  const modal = createModal();
-
-  document.body.appendChild(btn);
-  document.body.appendChild(modal);
-
-  btn.addEventListener("click", async () => {
-    modal.style.display = modal.style.display === "none" ? "block" : "none";
-
-    if (modal.style.display === "none") {
-      return;
-    }
-
-    modal.innerHTML = "Loading...";
-
-    const page = findPriceOnPage();
-    if (!page) {
-      modal.innerHTML = "Unable to detect price on this page.";
-      return;
-    }
-
-    const table = await fetchPricingTable(false);
-    if (!table) {
-      modal.innerHTML = "Unable to load pricing table.";
-      return;
-    }
-
-    const cfg = await getConfig();
-
-    const targetCurrencyCode = page.symbol ? CURRENCY_MAP[page.symbol] : null;
-
-    const pages = buildComparisonPages(table, page, targetCurrencyCode);
-
-    renderResult(modal, page, pages, cfg);
-  });
-
-  void fetchPricingTable(false);
-}
-
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", run);
-} else {
-  run();
+if (isPopupPage()) {
+  document.addEventListener("DOMContentLoaded", initPopup);
 }

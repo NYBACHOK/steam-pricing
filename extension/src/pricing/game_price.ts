@@ -91,18 +91,33 @@ export async function steamGamePriceGet(
   currency: SteamCurrency,
 ): Promise<GamePriceResult> {
   const countryCode = CURRENCY_TO_COUNTRY_MAP[currency] || "us";
-
   const url = new URL("https://store.steampowered.com/api/appdetails");
   url.searchParams.append("appids", appId.toString());
   url.searchParams.append("cc", countryCode);
   url.searchParams.append("filters", "price_overview");
+
+  console.info("[Steam Pricing] steamGamePriceGet: fetching Steam price", {
+    appId,
+    currency,
+    countryCode,
+    url: url.toString(),
+  });
 
   try {
     const response = await fetch(url.toString(), {
       headers: { "User-Agent": "TypeScript-Steam-Price-Fetcher/1.0" },
     });
 
+    console.info("[Steam Pricing] steamGamePriceGet: response received", {
+      status: response.status,
+      statusText: response.statusText,
+    });
+
     if (!response.ok) {
+      console.warn("[Steam Pricing] steamGamePriceGet: bad HTTP response", {
+        status: response.status,
+        statusText: response.statusText,
+      });
       return {
         appId,
         isFree: false,
@@ -115,7 +130,19 @@ export async function steamGamePriceGet(
     const appKey = appId.toString();
     const appPayload = rawData[appKey];
 
+    console.info("[Steam Pricing] steamGamePriceGet: parsed API payload", {
+      appKey,
+      hasPayload: !!appPayload,
+      success: appPayload?.success,
+    });
+
     if (!appPayload || !appPayload.success) {
+      console.warn(
+        "[Steam Pricing] steamGamePriceGet: app payload invalid or unsuccessful",
+        {
+          appPayload,
+        },
+      );
       return {
         appId,
         isFree: false,
@@ -126,8 +153,13 @@ export async function steamGamePriceGet(
 
     const data = appPayload.data;
 
-    // Free to Play games omit the price_overview object entirely
     if (!data.price_overview) {
+      console.info(
+        "[Steam Pricing] steamGamePriceGet: game appears free-to-play",
+        {
+          appId,
+        },
+      );
       return {
         appId,
         isFree: true,
@@ -135,12 +167,21 @@ export async function steamGamePriceGet(
       };
     }
 
+    console.info(
+      "[Steam Pricing] steamGamePriceGet: price overview available",
+      {
+        appId,
+        priceOverview: data.price_overview,
+      },
+    );
+
     return {
       appId,
       isFree: false,
       priceData: data.price_overview,
     };
   } catch (err) {
+    console.error("[Steam Pricing] steamGamePriceGet: fetch failed", err);
     return {
       appId,
       isFree: false,

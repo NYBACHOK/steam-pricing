@@ -1,11 +1,4 @@
-export type ConversionMethod = 1 | 2 | 3;
-
-export type PricingEntry = {
-  usd_price?: number;
-  currency_prices?: Array<{ currency_code: number; price: number }>;
-  region_prices?: Array<any>;
-  convert_method?: number;
-};
+import { ConversionMethod, PricingEntry } from "./comparison/fetch";
 
 export interface PagePrice {
   finalPrice: number;

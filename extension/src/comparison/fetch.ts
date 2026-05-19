@@ -1,6 +1,6 @@
 import { storageGet, storageSet } from "../storage";
 
-  const PRICING_TABLE =
+const PRICING_TABLE =
   "https://raw.githubusercontent.com/NYBACHOK/steam-pricing/master/pricing_table.json";
 
 export const STORAGE_KEY = "steam_pricing_cache_v1";
@@ -18,22 +18,39 @@ export type PricingEntry = {
 export async function fetchPricingTable(
   force = false,
 ): Promise<PricingEntry[] | null> {
+  console.info("[Steam Pricing] fetchPricingTable: start", { force });
   try {
     const cached = await storageGet<{ ts: number; data: PricingEntry[] }>(
       STORAGE_KEY,
     );
     if (!force && cached && Date.now() - (cached.ts || 0) < TTL) {
+      console.info("[Steam Pricing] fetchPricingTable: using cached table", {
+        ageMs: Date.now() - (cached.ts || 0),
+        length: cached.data?.length,
+      });
       return cached.data;
     }
 
+    console.info("[Steam Pricing] fetchPricingTable: fetching remote table", {
+      url: PRICING_TABLE,
+    });
     const resp = await fetch(PRICING_TABLE);
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.warn("[Steam Pricing] fetchPricingTable: response not ok", {
+        status: resp.status,
+        statusText: resp.statusText,
+      });
+      return null;
+    }
     const data = (await resp.json()) as PricingEntry[];
-   try {
- await storageSet(STORAGE_KEY, { ts: Date.now(), data });
-   }catch (e) {
-     console.warn("failed to save comparing table", e);
-   }
+    console.info("[Steam Pricing] fetchPricingTable: loaded data", {
+      length: data?.length,
+    });
+    try {
+      await storageSet(STORAGE_KEY, { ts: Date.now(), data });
+    } catch (e) {
+      console.warn("failed to save comparing table", e);
+    }
     return data;
   } catch (e) {
     console.warn("failed to fetch pricing table", e);

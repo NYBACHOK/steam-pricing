@@ -1,9 +1,25 @@
 import { gamePriceGet, priceCurrencyFromHtmlGet } from "../pricing/pricing";
+import type { SteamCurrencyInfo } from "../pricing/steam_currencies.ts";
 import { ConversionMethod, fetchPricingTable, PricingEntry } from "./fetch";
 
 export type ComparingResult = {
   discount_diff: number;
   original_diff: number;
+  recommended_final_price: number | null;
+  recommended_original_price: number | null;
+};
+
+export type PriceCompareSummary = {
+  usdFinalFormatted: string;
+  usdOriginalFormatted: string | null;
+  userFinalFormatted: string;
+  userOriginalFormatted: string | null;
+  userCurrency: SteamCurrencyInfo;
+};
+
+export type PriceCompareResult = {
+  summary: PriceCompareSummary;
+  comparisons: Map<ConversionMethod, ComparingResult>;
 };
 
 function findTableEntry(
@@ -16,7 +32,8 @@ function findTableEntry(
   }
 
   const candidates = table.filter(
-    (entry) => (entry.convert_method ?? 3) === method && entry.usd_price != null,
+    (entry) =>
+      (entry.convert_method ?? 3) === method && entry.usd_price != null,
   );
   if (candidates.length === 0) {
     return null;
@@ -73,9 +90,17 @@ function percentDiff(actual: number, expected: number | null): number {
 
 export async function priceCompare(
   appId?: number | null,
-): Promise<Map<ConversionMethod, ComparingResult> | null> {
+): Promise<PriceCompareResult | null> {
+  console.info("[Steam Pricing] priceCompare: starting comparison", { appId });
   const user_currency = priceCurrencyFromHtmlGet();
+  console.info(
+    "[Steam Pricing] priceCompare: detected user currency",
+    user_currency,
+  );
   if (!user_currency) {
+    console.warn(
+      "[Steam Pricing] priceCompare: failed to detect user currency from page",
+    );
     return null;
   }
 
@@ -85,13 +110,26 @@ export async function priceCompare(
     fetchPricingTable(),
   ]);
 
-  if (
-    !price_in_user_currency ||
-    !price_in_user_currency.priceData ||
-    !price_in_usd ||
-    !price_in_usd.priceData ||
-    !table
-  ) {
+  console.info("[Steam Pricing] priceCompare: fetched prices and table", {
+    price_in_user_currency,
+    price_in_usd,
+    table_length: table?.length ?? null,
+  });
+
+  if (!price_in_user_currency || !price_in_user_currency.priceData) {
+    console.warn(
+      "[Steam Pricing] priceCompare: missing user currency price data",
+    );
+    return null;
+  }
+
+  if (!price_in_usd || !price_in_usd.priceData) {
+    console.warn("[Steam Pricing] priceCompare: missing USD price data");
+    return null;
+  }
+
+  if (!table) {
+    console.warn("[Steam Pricing] priceCompare: pricing table unavailable");
     return null;
   }
 
@@ -100,8 +138,24 @@ export async function priceCompare(
   const usdFinal = price_in_usd.priceData.final;
   const usdOriginal = price_in_usd.priceData.initial;
 
+  console.info("[Steam Pricing] priceCompare: comparing values", {
+    userFinal,
+    userOriginal,
+    usdFinal,
+    usdOriginal,
+  });
+
+  const summary: PriceCompareSummary = {
+    usdFinalFormatted: price_in_usd.priceData.final_formatted,
+    usdOriginalFormatted: price_in_usd.priceData.initial_formatted || null,
+    userFinalFormatted: price_in_user_currency.priceData.final_formatted,
+    userOriginalFormatted:
+      price_in_user_currency.priceData.initial_formatted || null,
+    userCurrency: user_currency,
+  };
+
   const methods: ConversionMethod[] = [1, 2, 3];
-  const result = new Map<ConversionMethod, ComparingResult>();
+  const comparisons = new Map<ConversionMethod, ComparingResult>();
 
   for (const method of methods) {
     const finalEntry = findTableEntry(table, usdFinal, method);
@@ -109,20 +163,28 @@ export async function priceCompare(
     const discount_diff = percentDiff(userFinal, expectedFinal);
 
     let original_diff = 0;
+    let expectedOriginal: number | null = null;
     if (userOriginal != null && usdOriginal != null) {
       const originalEntry = findTableEntry(table, usdOriginal, method);
-      const expectedOriginal = extractLocalPrice(
-        originalEntry,
-        user_currency.id,
-      );
+      expectedOriginal = extractLocalPrice(originalEntry, user_currency.id);
       original_diff = percentDiff(userOriginal, expectedOriginal);
     }
 
-    result.set(method, {
+    console.info("[Steam Pricing] priceCompare: method result", {
+      method,
+      expectedFinal,
+      expectedOriginal,
       discount_diff,
       original_diff,
     });
+
+    comparisons.set(method, {
+      discount_diff,
+      original_diff,
+      recommended_final_price: expectedFinal,
+      recommended_original_price: expectedOriginal,
+    });
   }
 
-  return result;
+  return { summary, comparisons };
 }

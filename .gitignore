@@ -1,5 +1,4 @@
 /target
 /tmp
-*.html
 node_modules
 dist

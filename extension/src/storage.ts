@@ -1,4 +1,4 @@
-import { STORAGE_KEY_CONFIG } from "./consts";
+import { STORAGE_KEY_CONFIG } from "./consts.ts";
 
 export function storageGet<T = any>(key: string): Promise<T | undefined> {
   return new Promise((res) => {
