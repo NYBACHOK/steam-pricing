@@ -23,7 +23,6 @@ jobs:
         name: Install pnpm
         with:
           version: 10
-          cache: true
 
       - name: Install dependencies
         run: cd extension && pnpm install
@@ -54,7 +53,7 @@ jobs:
           else
             echo "Release does not exist, creating..."
             gh release create "v$VERSION" \
-              release-artifacts/ios-build/* \
+              extension/dist/web-ext/* \
               --generate-notes \
               --latest=true \
               --title="${GITHUB_REPOSITORY#*/} $VERSION"
