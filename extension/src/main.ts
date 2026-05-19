@@ -81,8 +81,8 @@ function renderRow(
       <div class="comparison-card-values">
         <div><span class="comparison-label">Discount diff:</span> <span class="comparison-value">${discount}</span></div>
         <div><span class="comparison-label">Original diff:</span> <span class="comparison-value">${original}</span></div>
-        <div><span class="comparison-label">Valve recommended final:</span> <span class="comparison-value">${recommendedFinal}</span></div>
-        <div><span class="comparison-label">Valve recommended original:</span> <span class="comparison-value">${recommendedOriginal}</span></div>
+        <div><span class="comparison-label">Valve final:</span> <span class="comparison-value">${recommendedFinal}</span></div>
+        <div><span class="comparison-label">Valve original:</span> <span class="comparison-value">${recommendedOriginal}</span></div>
       </div>
     </div>
   `;
@@ -115,7 +115,7 @@ function renderComparison(
       })
       .join("\n")}
   `;
-  elements.status.textContent = "Comparison ready.";
+  elements.status.textContent = "";
 }
 
 function queryActiveTabMessage(): Promise<SerializedPriceCompare> {
