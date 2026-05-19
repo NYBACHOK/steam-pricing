@@ -61,26 +61,6 @@ export async function gamePriceGet(
     return null;
   }
 
-  const key = `steam_game_price_${id}`;
-  console.info("[Steam Pricing] gamePriceGet: start", {
-    appId: id,
-    requestedCurrency: currency,
-  });
-
-  try {
-    const cached = await storageGet<{ ts: number; data: GamePriceResult }>(key);
-    if (cached && Date.now() - (cached.ts || 0) < GAME_PRICE_TTL) {
-      console.info("[Steam Pricing] gamePriceGet: using cached price", {
-        key,
-        ageMs: Date.now() - (cached.ts || 0),
-        cachedData: cached.data,
-      });
-      return cached.data;
-    }
-  } catch (e) {
-    console.warn("[Steam Pricing] gamePriceGet: storage read failed", e);
-  }
-
   let finalCurrency: SteamCurrency = "USD";
   if (currency) {
     finalCurrency = currency;
@@ -108,6 +88,26 @@ export async function gamePriceGet(
         e,
       );
     }
+  }
+
+  const key = `steam_game_price_${id}_${finalCurrency}`;
+  console.info("[Steam Pricing] gamePriceGet: start", {
+    appId: id,
+    requestedCurrency: finalCurrency,
+  });
+
+  try {
+    const cached = await storageGet<{ ts: number; data: GamePriceResult }>(key);
+    if (cached && Date.now() - (cached.ts || 0) < GAME_PRICE_TTL) {
+      console.info("[Steam Pricing] gamePriceGet: using cached price", {
+        key,
+        ageMs: Date.now() - (cached.ts || 0),
+        cachedData: cached.data,
+      });
+      return cached.data;
+    }
+  } catch (e) {
+    console.warn("[Steam Pricing] gamePriceGet: storage read failed", e);
   }
 
   let result: GamePriceResult;
