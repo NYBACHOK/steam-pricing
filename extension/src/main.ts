@@ -14,9 +14,10 @@ import {
   ComparisonPage,
 } from "./types.ts";
 import { buildButton, createModal } from "./ui.ts";
-import { getConversionMethodDescription, getConversionMethodName } from "./utils.ts";
-
-
+import {
+  getConversionMethodDescription,
+  getConversionMethodName,
+} from "./utils.ts";
 
 function findBestMatchForMethod(
   table: PricingEntry[],

@@ -13,7 +13,9 @@ export function getConversionMethodName(method: ConversionMethod): string {
   }
 }
 
-export function getConversionMethodDescription(method: ConversionMethod): string {
+export function getConversionMethodDescription(
+  method: ConversionMethod,
+): string {
   switch (method) {
     case 1:
       return "Direct currency conversion based on exchange rates.";
