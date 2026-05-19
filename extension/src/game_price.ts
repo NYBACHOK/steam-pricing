@@ -1,40 +1,4 @@
-/** All official currencies supported natively by Steam's regional billing engine */
-export type SteamCurrency =
-  | "USD"
-  | "GBP"
-  | "EUR"
-  | "CHF"
-  | "BRL"
-  | "JPY"
-  | "NOK"
-  | "IDR"
-  | "MYR"
-  | "PHP"
-  | "SGD"
-  | "THB"
-  | "VND"
-  | "KRW"
-  | "TRY"
-  | "UAH"
-  | "MXN"
-  | "CAD"
-  | "AUD"
-  | "NZD"
-  | "CNY"
-  | "INR"
-  | "CLP"
-  | "PEN"
-  | "COP"
-  | "ZAR"
-  | "HKD"
-  | "KWD"
-  | "QAR"
-  | "SAR"
-  | "AED"
-  | "KZT"
-  | "ILS"
-  | "CRC"
-  | "UYU";
+import { SteamCurrency } from "./steam_currencies";
 
 /**
  * Maps all supported Steam ISO currencies to an ideal country code ('cc')
@@ -79,6 +43,8 @@ const CURRENCY_TO_COUNTRY_MAP: Record<SteamCurrency, string> = {
   ILS: "il", // Israeli New Shekel
   CRC: "cr", // Costa Rican Colón
   UYU: "uy", // Uruguayan Peso
+  PLN: "pl", // Polish zloty
+  TWD: "tw"  // Taiwan New Dollar
 };
 
 export interface SteamPriceOverview {

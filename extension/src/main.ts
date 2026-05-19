@@ -17,12 +17,13 @@ import { buildButton, createModal } from "./ui.ts";
 import {
   getConversionMethodDescription,
   getConversionMethodName,
+  currencyFromPageGet,
 } from "./utils.ts";
 
 function findBestMatchForMethod(
   table: PricingEntry[],
   page: PagePrice,
-  targetCurrencyCode: number | null,
+  _targetCurrencyCode: number | null,
   method: ConversionMethod,
 ): ComparisonResult {
   let best: ComparisonResult = {
@@ -152,12 +153,9 @@ function parsePriceText(text: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function extractCurrencySymbol(text: string): string | null {
-  const symbol = text.replace(/[0-9.,\s\u00A0-]/g, "").trim();
-  return symbol || null;
-}
-
 function findPriceOnPage(): PagePrice | null {
+  const pageCurrency = currencyFromPageGet();
+
   const finalEl =
     document.querySelector(".discount_final_price") ||
     document.querySelector(".game_purchase_price") ||
@@ -167,7 +165,6 @@ function findPriceOnPage(): PagePrice | null {
   if (finalEl && (finalEl as HTMLElement).offsetParent !== null) {
     const finalTxt = finalEl.textContent || "";
     const finalVal = parsePriceText(finalTxt);
-    const symbol = extractCurrencySymbol(finalTxt);
 
     let origVal: number | null = null;
     let origTxt: string | null = null;
@@ -183,7 +180,7 @@ function findPriceOnPage(): PagePrice | null {
         finalRaw: finalTxt.trim(),
         originalPrice: origVal,
         originalRaw: origTxt?.trim() || null,
-        symbol,
+        symbol: pageCurrency,
       };
     }
   }
@@ -201,7 +198,7 @@ function findPriceOnPage(): PagePrice | null {
           finalRaw: txt.trim(),
           originalPrice: null,
           originalRaw: null,
-          symbol: extractCurrencySymbol(txt),
+          symbol: pageCurrency,
         };
       }
     }
