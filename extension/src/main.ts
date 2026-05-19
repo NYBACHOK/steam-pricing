@@ -36,15 +36,24 @@ function formatLocalPrice(value: number | null, symbol: string): string {
 }
 
 function renderSummary(summary: PriceCompareSummary): string {
+  const userOriginalDisplay =
+    summary.userOriginalFormatted ||
+    formatLocalPrice(summary.userOriginal, summary.userCurrency.symbol) ||
+    "N/A";
+  const usdOriginalDisplay =
+    summary.usdOriginalFormatted ||
+    formatLocalPrice(summary.usdOriginal, "$") ||
+    "N/A";
+
   return `
     <div class="comparison-summary">
       <div class="comparison-summary-item">
         <span class="comparison-label">USD final price:</span>
-        <span class="comparison-value">${summary.usdFinalFormatted}</span>
+        <span class="comparison-value">${usdOriginalDisplay || "N/A"}</span>
       </div>
       <div class="comparison-summary-item">
         <span class="comparison-label">Original price (${summary.userCurrency.code}):</span>
-        <span class="comparison-value">${summary.userOriginalFormatted ?? "N/A"}</span>
+        <span class="comparison-value">${userOriginalDisplay}</span>
       </div>
     </div>
   `;

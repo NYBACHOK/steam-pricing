@@ -12,8 +12,10 @@ export type ComparingResult = {
 export type PriceCompareSummary = {
   usdFinalFormatted: string;
   usdOriginalFormatted: string | null;
+  usdOriginal: number | null;
   userFinalFormatted: string;
   userOriginalFormatted: string | null;
+  userOriginal: number | null;
   userCurrency: SteamCurrencyInfo;
 };
 
@@ -148,9 +150,11 @@ export async function priceCompare(
   const summary: PriceCompareSummary = {
     usdFinalFormatted: price_in_usd.priceData.final_formatted,
     usdOriginalFormatted: price_in_usd.priceData.initial_formatted || null,
+    usdOriginal: usdOriginal,
     userFinalFormatted: price_in_user_currency.priceData.final_formatted,
     userOriginalFormatted:
       price_in_user_currency.priceData.initial_formatted || null,
+    userOriginal: userOriginal,
     userCurrency: user_currency,
   };
 
