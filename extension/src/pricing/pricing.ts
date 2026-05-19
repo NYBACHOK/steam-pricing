@@ -17,7 +17,7 @@ function extractAppIdFromUrl(): number | null {
   return m && m[1] ? parseInt(m[1], 10) : null;
 }
 
-function priceCurrencyFromHtmlGet(html?: string): SteamCurrencyInfo | null {
+export function priceCurrencyFromHtmlGet(html?: string): SteamCurrencyInfo | null {
   const doc =
     typeof html === "string"
       ? new DOMParser().parseFromString(html, "text/html")
